@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "tsx scripts/seed-database.ts",
+    "setup-db": "node scripts/setup-database.js",
+    "seed": "node scripts/seed-database.js",
+    "test-db": "node -e \"const { createClient } = require('@supabase/supabase-js'); require('dotenv').config({ path: '.env.local' }); const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY); supabase.from('airdrops').select('count').then(r => console.log('✅ Database connected'), e => console.log('❌ Error:', e.message));\"",
     "collect-data": "tsx lib/scraper.ts",
     "scheduler": "tsx scripts/data-scheduler.ts"
   },
