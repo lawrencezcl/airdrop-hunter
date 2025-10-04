@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { AirdropCard } from '@/components/AirdropCard'
-import { MockDataDisplay } from '@/components/MockDataDisplay'
-import { supabase, Airdrop } from '@/lib/supabase'
-import { mockAirdrops } from '@/lib/mock-data'
+import { Airdrop, apiClient } from '@/lib/api-client'
 import { MagnifyingGlassIcon, FunnelIcon, SparklesIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 
@@ -21,180 +19,61 @@ export default function Home() {
 
   useEffect(() => {
     fetchAirdrops()
-
-    // Fallback: Always show mock data if database doesn't load within 3 seconds
-    const fallbackTimer = setTimeout(() => {
-      if (loading) {
-        console.log('Fallback timer triggered: Using mock data due to slow database loading')
-        setLoading(false)
-        setAirdrops(mockAirdrops)
-
-        // Set featured airdrops (highest priority)
-        const featured = mockAirdrops.filter(a => a.featured || a.priority >= 8).slice(0, 3)
-        setFeaturedAirdrops(featured)
-      }
-    }, 3000)
-
-    return () => clearTimeout(fallbackTimer)
   }, [selectedCategory, selectedStatus, searchTerm])
 
   const fetchAirdrops = async () => {
     try {
       setLoading(true)
+      console.log('🔗 Fetching airdrops from Neon database via API...')
 
-      // Check if we have valid Supabase credentials
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-      console.log('Environment check - Supabase URL:', supabaseUrl)
-      console.log('Environment check - Supabase Key:', supabaseKey ? supabaseKey.substring(0, 20) + '...' : 'missing')
-      console.log('Environment check - Key length:', supabaseKey ? supabaseKey.length : 0)
-      console.log('Environment check - Key contains placeholder:', supabaseKey ? supabaseKey.includes('placeholder') : false)
-
-      // More robust placeholder detection
-      const isPlaceholder = !supabaseUrl ||
-                           !supabaseKey ||
-                           supabaseKey.includes('placeholder') ||
-                           supabaseUrl.includes('placeholder') ||
-                           supabaseKey.includes('placeholder_key_for_build') ||
-                           supabaseKey.trim() === 'placeholder_key_for_build' ||
-                           supabaseKey.replace('\\n', '').trim() === 'placeholder_key_for_build' ||
-                           supabaseKey.replace('\n', '').trim() === 'placeholder_key_for_build' ||
-                           supabaseKey.length < 20
-
-      console.log('Using placeholder credentials:', isPlaceholder)
-
-      // If using placeholder credentials or any issue, use mock data
-      if (isPlaceholder) {
-        console.log('Using mock data - placeholder database credentials detected')
-        let filteredAirdrops = mockAirdrops
-
-        // Apply filters
-        if (selectedCategory !== 'all') {
-          filteredAirdrops = filteredAirdrops.filter(a => a.category === selectedCategory)
-        }
-
-        if (selectedStatus !== 'all') {
-          filteredAirdrops = filteredAirdrops.filter(a => a.status === selectedStatus)
-        }
-
-        if (searchTerm) {
-          filteredAirdrops = filteredAirdrops.filter(a =>
-            a.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            a.description.toLowerCase().includes(searchTerm.toLowerCase())
-          )
-        }
-
-        // Sort by priority
-        filteredAirdrops.sort((a, b) => b.priority - a.priority)
-
-        setAirdrops(filteredAirdrops)
-
-        // Set featured airdrops (highest priority)
-        const featured = filteredAirdrops.filter(a => a.featured || a.priority >= 8).slice(0, 3)
-        setFeaturedAirdrops(featured)
-
+      // Test connection first
+      const isConnected = await apiClient.testConnection()
+      if (!isConnected) {
+        console.error('❌ Failed to connect to database API')
+        setAirdrops([])
+        setFeaturedAirdrops([])
         setLoading(false)
         return
       }
 
-      // Try to connect to real database
-      let query = supabase
-        .from('airdrops')
-        .select('*')
-        .order('priority', { ascending: false })
+      console.log('✅ Connected to database API successfully')
 
-      // Apply filters
+      // Build filters object
+      const filters: any = {}
       if (selectedCategory !== 'all') {
-        query = query.eq('category', selectedCategory)
+        filters.category = selectedCategory
       }
-
       if (selectedStatus !== 'all') {
-        query = query.eq('status', selectedStatus)
+        filters.status = selectedStatus
       }
-
       if (searchTerm) {
-        query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+        filters.search = searchTerm
       }
 
-      const { data: airdropsData, error } = await query
-
-      if (error) {
-        console.error('Database error:', error)
-        // Fallback to mock data if database fails
-        console.log('Falling back to mock data due to database error')
-        let filteredAirdrops = mockAirdrops
-
-        // Apply filters
-        if (selectedCategory !== 'all') {
-          filteredAirdrops = filteredAirdrops.filter(a => a.category === selectedCategory)
-        }
-
-        if (selectedStatus !== 'all') {
-          filteredAirdrops = filteredAirdrops.filter(a => a.status === selectedStatus)
-        }
-
-        if (searchTerm) {
-          filteredAirdrops = filteredAirdrops.filter(a =>
-            a.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            a.description.toLowerCase().includes(searchTerm.toLowerCase())
-          )
-        }
-
-        // Sort by priority
-        filteredAirdrops.sort((a, b) => b.priority - a.priority)
-
-        setAirdrops(filteredAirdrops)
-
-        // Set featured airdrops (highest priority)
-        const featured = filteredAirdrops.filter(a => a.featured || a.priority >= 8).slice(0, 3)
-        setFeaturedAirdrops(featured)
-
-        setLoading(false)
-        return
-      }
-
-      const fetchedAirdrops = airdropsData || []
+      // Fetch airdrops with filters
+      const fetchedAirdrops = await apiClient.getAirdrops(filters)
+      console.log(`📊 Retrieved ${fetchedAirdrops.length} airdrops`)
 
       setAirdrops(fetchedAirdrops)
 
-      // Set featured airdrops (highest priority)
-      const featured = fetchedAirdrops.filter(a => a.featured || a.priority >= 8).slice(0, 3)
-      setFeaturedAirdrops(featured)
+      // Get featured airdrops only if not searching
+      if (!searchTerm) {
+        const featured = await apiClient.getFeaturedAirdrops(3)
+        setFeaturedAirdrops(featured)
+      } else {
+        // Set featured airdrops from search results
+        const featured = fetchedAirdrops
+          .filter(a => a.featured || a.priority >= 8)
+          .slice(0, 3)
+        setFeaturedAirdrops(featured)
+      }
 
       setLoading(false)
 
     } catch (error) {
-      console.error('Error:', error)
-      // Fallback to mock data
-      console.log('Falling back to mock data due to error')
-      let filteredAirdrops = mockAirdrops
-
-      // Apply filters
-      if (selectedCategory !== 'all') {
-        filteredAirdrops = filteredAirdrops.filter(a => a.category === selectedCategory)
-      }
-
-      if (selectedStatus !== 'all') {
-        filteredAirdrops = filteredAirdrops.filter(a => a.status === selectedStatus)
-      }
-
-      if (searchTerm) {
-        filteredAirdrops = filteredAirdrops.filter(a =>
-          a.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          a.description.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      }
-
-      // Sort by priority
-      filteredAirdrops.sort((a, b) => b.priority - a.priority)
-
-      setAirdrops(filteredAirdrops)
-
-      // Set featured airdrops (highest priority)
-      const featured = filteredAirdrops.filter(a => a.featured || a.priority >= 8).slice(0, 3)
-      setFeaturedAirdrops(featured)
-
+      console.error('❌ Error fetching airdrops:', error)
+      setAirdrops([])
+      setFeaturedAirdrops([])
       setLoading(false)
     }
   }
@@ -458,19 +337,26 @@ export default function Home() {
               ))}
             </div>
           ) : (
-            <div>
-              <div className="text-center py-20 mb-8">
-                <div className="glass-heavy rounded-3xl p-12 max-w-md mx-auto">
-                  <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                    <FunnelIcon className="w-10 h-10 text-gray-400" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-3">Database temporarily unavailable</h3>
-                  <p className="text-gray-600 mb-8 leading-relaxed">
-                    Showing you our curated airdrop collection instead. These are high-potential opportunities you shouldn't miss!
-                  </p>
+            <div className="text-center py-20">
+              <div className="glass-heavy rounded-3xl p-12 max-w-md mx-auto">
+                <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <FunnelIcon className="w-10 h-10 text-gray-400" />
                 </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-3">No airdrops found</h3>
+                <p className="text-gray-600 mb-8 leading-relaxed">
+                  Try adjusting your filters or search terms to find what you're looking for.
+                </p>
+                <button
+                  onClick={() => {
+                    setSearchTerm('')
+                    setSelectedCategory('all')
+                    setSelectedStatus('upcoming')
+                  }}
+                  className="btn-primary"
+                >
+                  Clear All Filters
+                </button>
               </div>
-              <MockDataDisplay />
             </div>
           )}
 

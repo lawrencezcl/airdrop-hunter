@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { AirdropCard } from '@/components/AirdropCard'
 import { SearchBar } from '@/components/SearchBar'
 import { FilterBar } from '@/components/FilterBar'
-import { mockAirdrops } from '@/lib/mock-data'
+import { Airdrop, apiClient } from '@/lib/api-client'
 
 interface Airdrop {
   id: string
@@ -34,11 +34,27 @@ export default function AirdropsPage() {
 
   
   useEffect(() => {
-    // Always use mock data for now since database has placeholder credentials
-    console.log('Airdrops page: Using mock data')
-    setAirdrops(mockAirdrops)
-    setFilteredAirdrops(mockAirdrops)
-    setLoading(false)
+    const fetchAirdrops = async () => {
+      try {
+        setLoading(true)
+        console.log('🔗 Airdrops page: Fetching from Neon database via API...')
+
+        const fetchedAirdrops = await apiClient.getAirdrops({ limit: 100 })
+        console.log(`📊 Airdrops page: Retrieved ${fetchedAirdrops.length} airdrops`)
+
+        setAirdrops(fetchedAirdrops)
+        setFilteredAirdrops(fetchedAirdrops)
+        setLoading(false)
+
+      } catch (error) {
+        console.error('❌ Airdrops page: Error fetching from Neon API:', error)
+        setAirdrops([])
+        setFilteredAirdrops([])
+        setLoading(false)
+      }
+    }
+
+    fetchAirdrops()
   }, [])
 
   useEffect(() => {

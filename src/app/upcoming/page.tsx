@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { AirdropCard } from '@/components/AirdropCard'
 import { SearchBar } from '@/components/SearchBar'
-import { mockAirdrops } from '@/lib/mock-data'
+import { Airdrop, apiClient } from '@/lib/api-client'
 
 interface Airdrop {
   id: string
@@ -29,11 +29,25 @@ export default function UpcomingPage() {
 
   
   useEffect(() => {
-    // Filter mock data for upcoming airdrops only
-    console.log('Upcoming page: Using mock data')
-    const upcoming = mockAirdrops.filter(airdrop => airdrop.status === 'upcoming')
-    setUpcomingAirdrops(upcoming)
-    setLoading(false)
+    const fetchUpcomingAirdrops = async () => {
+      try {
+        setLoading(true)
+        console.log('🔗 Upcoming page: Fetching from Neon database via API...')
+
+        const upcoming = await apiClient.getAirdropsByStatus('upcoming', 50)
+        console.log(`📊 Upcoming page: Retrieved ${upcoming.length} upcoming airdrops`)
+
+        setUpcomingAirdrops(upcoming)
+        setLoading(false)
+
+      } catch (error) {
+        console.error('❌ Upcoming page: Error fetching from Neon API:', error)
+        setUpcomingAirdrops([])
+        setLoading(false)
+      }
+    }
+
+    fetchUpcomingAirdrops()
   }, [])
 
   const filteredAirdrops = upcomingAirdrops.filter(airdrop =>
