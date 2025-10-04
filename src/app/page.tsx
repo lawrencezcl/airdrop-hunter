@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { AirdropCard } from '@/components/AirdropCard'
+import { MockDataDisplay } from '@/components/MockDataDisplay'
 import { supabase, Airdrop } from '@/lib/supabase'
 import { mockAirdrops } from '@/lib/mock-data'
 import { MagnifyingGlassIcon, FunnelIcon, SparklesIcon } from '@heroicons/react/24/outline'
@@ -20,6 +21,21 @@ export default function Home() {
 
   useEffect(() => {
     fetchAirdrops()
+
+    // Fallback: Always show mock data if database doesn't load within 3 seconds
+    const fallbackTimer = setTimeout(() => {
+      if (loading) {
+        console.log('Fallback timer triggered: Using mock data due to slow database loading')
+        setLoading(false)
+        setAirdrops(mockAirdrops)
+
+        // Set featured airdrops (highest priority)
+        const featured = mockAirdrops.filter(a => a.featured || a.priority >= 8).slice(0, 3)
+        setFeaturedAirdrops(featured)
+      }
+    }, 3000)
+
+    return () => clearTimeout(fallbackTimer)
   }, [selectedCategory, selectedStatus, searchTerm])
 
   const fetchAirdrops = async () => {
@@ -31,14 +47,19 @@ export default function Home() {
       const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
       console.log('Environment check - Supabase URL:', supabaseUrl)
-      console.log('Environment check - Supabase Key:', supabaseKey ? 'exists' : 'missing')
+      console.log('Environment check - Supabase Key:', supabaseKey ? supabaseKey.substring(0, 20) + '...' : 'missing')
+      console.log('Environment check - Key length:', supabaseKey ? supabaseKey.length : 0)
+      console.log('Environment check - Key contains placeholder:', supabaseKey ? supabaseKey.includes('placeholder') : false)
 
       // More robust placeholder detection
       const isPlaceholder = !supabaseUrl ||
                            !supabaseKey ||
                            supabaseKey.includes('placeholder') ||
                            supabaseUrl.includes('placeholder') ||
-                           supabaseKey === 'placeholder_key_for_build' ||
+                           supabaseKey.includes('placeholder_key_for_build') ||
+                           supabaseKey.trim() === 'placeholder_key_for_build' ||
+                           supabaseKey.replace('\\n', '').trim() === 'placeholder_key_for_build' ||
+                           supabaseKey.replace('\n', '').trim() === 'placeholder_key_for_build' ||
                            supabaseKey.length < 20
 
       console.log('Using placeholder credentials:', isPlaceholder)
@@ -437,26 +458,19 @@ export default function Home() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-20">
-              <div className="glass-heavy rounded-3xl p-12 max-w-md mx-auto">
-                <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                  <FunnelIcon className="w-10 h-10 text-gray-400" />
+            <div>
+              <div className="text-center py-20 mb-8">
+                <div className="glass-heavy rounded-3xl p-12 max-w-md mx-auto">
+                  <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <FunnelIcon className="w-10 h-10 text-gray-400" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">Database temporarily unavailable</h3>
+                  <p className="text-gray-600 mb-8 leading-relaxed">
+                    Showing you our curated airdrop collection instead. These are high-potential opportunities you shouldn't miss!
+                  </p>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-3">No airdrops found</h3>
-                <p className="text-gray-600 mb-8 leading-relaxed">
-                  Try adjusting your filters or search terms to find what you're looking for.
-                </p>
-                <button
-                  onClick={() => {
-                    setSearchTerm('')
-                    setSelectedCategory('all')
-                    setSelectedStatus('upcoming')
-                  }}
-                  className="btn-primary"
-                >
-                  Clear All Filters
-                </button>
               </div>
+              <MockDataDisplay />
             </div>
           )}
 
