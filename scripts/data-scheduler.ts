@@ -1,4 +1,5 @@
 import AirdropScraper from '../lib/scraper';
+import EnhancedAirdropScraper from '../lib/enhanced-scraper';
 import cron from 'node-cron';
 import { createClient } from '@supabase/supabase-js';
 
@@ -9,9 +10,11 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 class DataCollectionScheduler {
   private scraper: AirdropScraper;
+  private enhancedScraper: EnhancedAirdropScraper;
 
   constructor() {
     this.scraper = new AirdropScraper();
+    this.enhancedScraper = new EnhancedAirdropScraper();
   }
 
   async start() {
@@ -20,7 +23,8 @@ class DataCollectionScheduler {
     // Initialize scraper sources
     try {
       await this.scraper.initializeSources();
-      console.log('✅ Scraper sources initialized');
+      await this.enhancedScraper.initialize();
+      console.log('✅ Both scrapers initialized successfully');
     } catch (error) {
       console.error('❌ Failed to initialize scraper sources:', error);
     }
@@ -34,6 +38,12 @@ class DataCollectionScheduler {
     cron.schedule('0 */6 * * *', async () => {
       console.log('🔄 Running comprehensive scraping...');
       await this.runComprehensiveScraping();
+    });
+
+    // Run enhanced scraping every 8 hours
+    cron.schedule('0 */8 * * *', async () => {
+      console.log('🚀 Running enhanced scraping with X.com and websites...');
+      await this.runEnhancedScraping();
     });
 
     // Run quick check every 2 hours
@@ -56,6 +66,7 @@ class DataCollectionScheduler {
 
     console.log('✅ All scheduled tasks configured:');
     console.log('   - Comprehensive scraping: Every 6 hours');
+    console.log('   - Enhanced scraping (X.com + websites): Every 8 hours');
     console.log('   - Quick data check: Every 2 hours');
     console.log('   - Featured airdrops update: Daily');
     console.log('   - Log cleanup: Weekly');
@@ -63,6 +74,10 @@ class DataCollectionScheduler {
     // Run initial scraping
     console.log('🚀 Running initial data collection...');
     await this.runComprehensiveScraping();
+
+    // Run initial enhanced scraping
+    console.log('🚀 Running initial enhanced data collection...');
+    await this.runEnhancedScraping();
   }
 
   private async runComprehensiveScraping() {
@@ -202,6 +217,28 @@ class DataCollectionScheduler {
         });
     } catch (error) {
       console.error('Failed to log schedule completion:', error);
+    }
+  }
+
+  private async runEnhancedScraping() {
+    const startTime = new Date();
+    console.log(`🕒 Starting enhanced scraping at ${startTime.toISOString()}`);
+
+    try {
+      const airdrops = await this.enhancedScraper.scrapeAllSources();
+      const result = await this.enhancedScraper.saveAirdrops(airdrops);
+
+      const endTime = new Date();
+      const duration = (endTime.getTime() - startTime.getTime()) / 1000;
+
+      console.log(`✅ Enhanced scraping completed in ${duration}s`);
+      console.log(`📊 Results: ${result.success} saved, ${result.duplicates} duplicates, ${result.errors} errors`);
+
+      await this.logScheduleCompletion('enhanced_scraping', 'success', duration);
+
+    } catch (error) {
+      console.error('❌ Enhanced scraping failed:', error);
+      await this.logScheduleCompletion('enhanced_scraping', 'failed', 0, error instanceof Error ? error.message : 'Unknown error');
     }
   }
 
